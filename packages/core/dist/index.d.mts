@@ -1,3 +1,5 @@
+import { Database } from 'better-sqlite3';
+
 /** 错题状态 */
 type MistakeStatus = 'pending' | 'corrected' | 'recurring' | 'verified' | 'graduated' | 'abandoned' | 'false_positive';
 /** 触发信号级别 */
@@ -157,4 +159,114 @@ declare function isValidTransition(from: MistakeStatus, to: MistakeStatus): bool
 /** 判断规则状态流转是否合法 */
 declare function isValidRuleTransition(from: RuleStatus, to: RuleStatus): boolean;
 
-export { type ContextMessage, type LinkDirection, type LinkType, type Mistake, type MistakeFilter, type MistakeLink, type MistakeStatus, RULE_VALID_TRANSITIONS, type Reflection, type ReflectionFilter, type Rule, type RuleFilter, type RulePriority, type RuleStatus, type TriggerType, VALID_TRANSITIONS, type Verification, type VerificationCount, type VerificationResult, isValidRuleTransition, isValidTransition };
+/** 日期范围 */
+interface DateRange {
+    from: string;
+    to: string;
+}
+/** 分类统计 */
+interface CategoryStats {
+    category: string;
+    count: number;
+    recurrence_total: number;
+    by_status: Record<string, number>;
+}
+/** 全局统计 */
+interface OverallStats {
+    total: number;
+    by_status: Record<string, number>;
+    by_category: Record<string, number>;
+    total_rules: number;
+    total_verifications: number;
+}
+/** 存储适配器接口 — SQLite 和 Memory 共用 */
+interface StorageAdapter {
+    addMistake(mistake: Mistake): Promise<string>;
+    getMistake(id: string): Promise<Mistake | null>;
+    updateMistake(id: string, updates: Partial<Mistake>): Promise<void>;
+    queryMistakes(filter: MistakeFilter): Promise<Mistake[]>;
+    incrementRecurrence(category: string, agentId?: string): Promise<number>;
+    addLink(from: string, to: string, type: string, confidence?: number): Promise<void>;
+    getLinks(id: string, direction?: LinkDirection): Promise<MistakeLink[]>;
+    getRelated(id: string, depth?: number): Promise<MistakeLink[]>;
+    addRule(rule: Rule): Promise<string>;
+    getRules(filter?: RuleFilter): Promise<Rule[]>;
+    updateRule(id: string, updates: Partial<Rule>): Promise<void>;
+    addVerification(verification: Verification): Promise<void>;
+    getVerificationCount(ruleId: string): Promise<VerificationCount>;
+    addReflection(reflection: Reflection): Promise<string>;
+    getReflections(filter?: ReflectionFilter): Promise<Reflection[]>;
+    getCategoryStats(agentId?: string): Promise<CategoryStats[]>;
+    getOverallStats(agentId?: string, dateRange?: DateRange): Promise<OverallStats>;
+    searchMistakes(query: string, limit?: number): Promise<Mistake[]>;
+    archiveMistakes(ids: string[]): Promise<number>;
+    compactGraduated(category?: string): Promise<number>;
+    getConfig(key: string): Promise<unknown>;
+    setConfig(key: string, value: unknown): Promise<void>;
+}
+
+/** SQLite 存储适配器 */
+declare class SQLiteAdapter implements StorageAdapter {
+    private db;
+    constructor(dbPath: string);
+    close(): void;
+    addMistake(mistake: Mistake): Promise<string>;
+    getMistake(id: string): Promise<Mistake | null>;
+    updateMistake(id: string, updates: Partial<Mistake>): Promise<void>;
+    queryMistakes(filter: MistakeFilter): Promise<Mistake[]>;
+    incrementRecurrence(category: string, agentId?: string): Promise<number>;
+    addLink(from: string, to: string, type: string, confidence?: number): Promise<void>;
+    getLinks(id: string, direction?: LinkDirection): Promise<MistakeLink[]>;
+    getRelated(id: string, depth?: number): Promise<MistakeLink[]>;
+    addRule(rule: Rule): Promise<string>;
+    getRules(filter?: RuleFilter): Promise<Rule[]>;
+    updateRule(id: string, updates: Partial<Rule>): Promise<void>;
+    addVerification(verification: Verification): Promise<void>;
+    getVerificationCount(ruleId: string): Promise<VerificationCount>;
+    addReflection(reflection: Reflection): Promise<string>;
+    getReflections(filter?: ReflectionFilter): Promise<Reflection[]>;
+    getCategoryStats(agentId?: string): Promise<CategoryStats[]>;
+    getOverallStats(agentId?: string, dateRange?: DateRange): Promise<OverallStats>;
+    searchMistakes(query: string, limit?: number): Promise<Mistake[]>;
+    archiveMistakes(ids: string[]): Promise<number>;
+    compactGraduated(category?: string): Promise<number>;
+    getConfig(key: string): Promise<unknown>;
+    setConfig(key: string, value: unknown): Promise<void>;
+}
+
+/** 内存存储适配器 — 用于测试 */
+declare class MemoryAdapter implements StorageAdapter {
+    private mistakes;
+    private rules;
+    private links;
+    private verifications;
+    private reflections;
+    private config;
+    addMistake(mistake: Mistake): Promise<string>;
+    getMistake(id: string): Promise<Mistake | null>;
+    updateMistake(id: string, updates: Partial<Mistake>): Promise<void>;
+    queryMistakes(filter: MistakeFilter): Promise<Mistake[]>;
+    incrementRecurrence(category: string, agentId?: string): Promise<number>;
+    addLink(from: string, to: string, type: string, confidence?: number): Promise<void>;
+    getLinks(id: string, direction?: LinkDirection): Promise<MistakeLink[]>;
+    getRelated(id: string, depth?: number): Promise<MistakeLink[]>;
+    addRule(rule: Rule): Promise<string>;
+    getRules(filter?: RuleFilter): Promise<Rule[]>;
+    updateRule(id: string, updates: Partial<Rule>): Promise<void>;
+    addVerification(verification: Verification): Promise<void>;
+    getVerificationCount(ruleId: string): Promise<VerificationCount>;
+    addReflection(reflection: Reflection): Promise<string>;
+    getReflections(filter?: ReflectionFilter): Promise<Reflection[]>;
+    getCategoryStats(agentId?: string): Promise<CategoryStats[]>;
+    getOverallStats(agentId?: string, dateRange?: DateRange): Promise<OverallStats>;
+    searchMistakes(query: string, limit?: number): Promise<Mistake[]>;
+    archiveMistakes(ids: string[]): Promise<number>;
+    compactGraduated(category?: string): Promise<number>;
+    getConfig(key: string): Promise<unknown>;
+    setConfig(key: string, value: unknown): Promise<void>;
+}
+
+/** 执行全部 pending migrations */
+declare function runMigrations(db: Database): void;
+
+export { type CategoryStats, type ContextMessage, type DateRange, type LinkDirection, type LinkType, MemoryAdapter, type Mistake, type MistakeFilter, type MistakeLink, type MistakeStatus, type OverallStats, RULE_VALID_TRANSITIONS, type Reflection, type ReflectionFilter, type Rule, type RuleFilter, type RulePriority, type RuleStatus, SQLiteAdapter, type StorageAdapter, type TriggerType, VALID_TRANSITIONS, type Verification, type VerificationCount, type VerificationResult, isValidRuleTransition, isValidTransition, runMigrations };
