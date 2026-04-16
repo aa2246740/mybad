@@ -1,4 +1,7 @@
 import Database from 'better-sqlite3'
+import { mkdirSync, existsSync } from 'node:fs'
+import { dirname } from 'node:path'
+import { homedir } from 'node:os'
 import type { Mistake, MistakeFilter } from '../models/mistake'
 import type { Rule, RuleFilter } from '../models/rule'
 import type { MistakeLink, LinkDirection } from '../models/link'
@@ -55,7 +58,15 @@ export class SQLiteAdapter implements StorageAdapter {
   private db: Database.Database
 
   constructor(dbPath: string) {
-    this.db = new Database(dbPath)
+    // 展开 ~ 为 home 目录，并自动创建父目录
+    const resolved = dbPath.startsWith('~')
+      ? dbPath.replace(/^~/, homedir())
+      : dbPath
+    const dir = dirname(resolved)
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true })
+    }
+    this.db = new Database(resolved)
     this.db.pragma('journal_mode = WAL')
     this.db.pragma('busy_timeout = 5000')
     this.db.pragma('foreign_keys = ON')

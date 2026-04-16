@@ -14,11 +14,8 @@ export interface MyBadMCPOptions {
 /** 创建 MCP Server */
 export function createServer(options: MyBadMCPOptions = {}) {
   const dbPath = options.dbPath ?? process.env.MYBAD_DB_PATH ?? '~/.mybad/mybad.db'
-  const expandedPath = dbPath.startsWith('~')
-    ? dbPath.replace('~', process.env.HOME ?? '~')
-    : dbPath
 
-  const adapter = new SQLiteAdapter(expandedPath)
+  const adapter = new SQLiteAdapter(dbPath)
   const engine = new MyBadEngine(adapter)
 
   const server = new Server(

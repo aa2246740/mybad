@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 import { Command } from 'commander'
 import { makeCaptureCommand } from './commands/capture'
 import { makeQueryCommand } from './commands/query'
