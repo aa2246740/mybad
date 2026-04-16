@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "mybad": {
+      "command": "node",
+      "args": ["__INSTALL_PATH__/node_modules/@mybad/mcp-server/dist/index.cjs"],
+      "env": {
+        "MYBAD_DB_PATH": "~/.mybad/mybad.db"
+      }
+    }
+  }
+}
