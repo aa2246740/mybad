@@ -25,6 +25,14 @@
 4. 状态机覆盖全部合法流转 + 拒绝非法流转
 5. Recurrence 计数是原子操作
 
+**Plans:** 4 plans
+
+Plans:
+- [ ] 01-core-engine/01-PLAN.md — Monorepo 初始化 + 全部数据模型定义
+- [ ] 01-core-engine/02-PLAN.md — 存储层（StorageAdapter 接口 + SQLite + Memory）
+- [ ] 01-core-engine/03-PLAN.md — 引擎层（CRUD + Linker + Lifecycle + Stats）
+- [ ] 01-core-engine/04-PLAN.md — 集成测试 + 并发测试 + 状态机全覆盖
+
 **Build Order:**
 1. Monorepo 初始化 + TypeScript 配置
 2. Models（纯类型）
@@ -64,5 +72,4 @@
 3. `npx @mybad/mcp-server` 能直接启动
 
 ---
-
 *Roadmap created: 2026-04-16*
