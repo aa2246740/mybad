@@ -1,0 +1,22 @@
+{
+  "name": "@mybad/cli",
+  "version": "0.1.0",
+  "description": "MyBad CLI — AI Agent 错题集命令行工具",
+  "bin": {
+    "mybad": "./dist/index.cjs"
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "start": "node dist/index.cjs"
+  },
+  "dependencies": {
+    "@mybad/core": "workspace:*",
+    "commander": "^13.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "tsup": "^8.0.0"
+  },
+  "license": "Apache-2.0"
+}

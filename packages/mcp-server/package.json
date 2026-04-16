@@ -1,0 +1,32 @@
+{
+  "name": "@mybad/mcp-server",
+  "version": "0.1.0",
+  "description": "MyBad MCP Server — 让所有 AI Agent 拥有错题集",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "mybad-mcp": "./dist/index.cjs"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "start": "node dist/index.cjs"
+  },
+  "dependencies": {
+    "@mybad/core": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "tsup": "^8.0.0"
+  },
+  "license": "Apache-2.0"
+}
