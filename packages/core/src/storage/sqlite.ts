@@ -387,16 +387,32 @@ export class SQLiteAdapter implements StorageAdapter {
   // ── Search ────────────────────────────────────────────
 
   async searchMistakes(query: string, limit: number = 20): Promise<Mistake[]> {
-    const ftsRows = this.db.prepare(
-      `SELECT id FROM mistakes_fts WHERE mistakes_fts MATCH ? ORDER BY rank LIMIT ?`
-    ).all(query, limit) as any[]
-    if (ftsRows.length === 0) return []
+    // 先尝试 FTS5 全文搜索
+    let rows: any[]
+    try {
+      const ftsRows = this.db.prepare(
+        `SELECT id FROM mistakes_fts WHERE mistakes_fts MATCH ? ORDER BY rank LIMIT ?`
+      ).all(query, limit) as any[]
+      if (ftsRows.length > 0) {
+        const ids = ftsRows.map(r => r.id)
+        const placeholders = ids.map(() => '?').join(',')
+        rows = this.db.prepare(
+          `SELECT * FROM mistakes WHERE id IN (${placeholders})`
+        ).all(...ids) as any[]
+        return rows.map(rowToMistake)
+      }
+    } catch {
+      // FTS5 MATCH 语法错误（特殊字符等），走 LIKE fallback
+    }
 
-    const ids = ftsRows.map(r => r.id)
-    const placeholders = ids.map(() => '?').join(',')
-    const rows = this.db.prepare(
-      `SELECT * FROM mistakes WHERE id IN (${placeholders})`
-    ).all(...ids) as any[]
+    // LIKE fallback：逐字段模糊匹配，对中文和特殊字符友好
+    const pattern = `%${query}%`
+    rows = this.db.prepare(
+      `SELECT * FROM mistakes
+       WHERE category LIKE ? OR ai_misunderstanding LIKE ?
+       OR user_intent LIKE ? OR user_correction LIKE ?
+       ORDER BY updated_at DESC LIMIT ?`
+    ).all(pattern, pattern, pattern, pattern, limit) as any[]
     return rows.map(rowToMistake)
   }
 
