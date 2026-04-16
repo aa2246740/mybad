@@ -853,10 +853,11 @@ var CrudEngine = class {
     if (recurrence > 1) {
       const existing = await this.storage.queryMistakes({
         category: input.category,
-        limit: 1
+        limit: 2
       });
-      if (existing.length > 0 && existing[0].id !== mistake.id) {
-        await this.storage.addLink(mistake.id, existing[0].id, "same_category");
+      const other = existing.find((m) => m.id !== mistake.id);
+      if (other) {
+        await this.storage.addLink(mistake.id, other.id, "same_category");
       }
     }
     return mistake;

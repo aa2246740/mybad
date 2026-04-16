@@ -29,14 +29,16 @@ export class CrudEngine {
 
     await this.storage.addMistake(mistake)
 
-    // 同 category 自动关联：找最近的同 category mistake 建 link
+    // 同 category 自动关联：找最近的同 category 其他 mistake 建 link
     if (recurrence > 1) {
       const existing = await this.storage.queryMistakes({
         category: input.category,
-        limit: 1,
+        limit: 2,
       })
-      if (existing.length > 0 && existing[0].id !== mistake.id) {
-        await this.storage.addLink(mistake.id, existing[0].id, 'same_category')
+      // 排除自身，关联到最近的同 category mistake
+      const other = existing.find(m => m.id !== mistake.id)
+      if (other) {
+        await this.storage.addLink(mistake.id, other.id, 'same_category')
       }
     }
 
