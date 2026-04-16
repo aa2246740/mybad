@@ -30,9 +30,15 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 // src/index.ts
 var index_exports = {};
 __export(index_exports, {
+  CrudEngine: () => CrudEngine,
+  InvalidTransitionError: () => InvalidTransitionError,
+  LifecycleEngine: () => LifecycleEngine,
+  LinkerEngine: () => LinkerEngine,
   MemoryAdapter: () => MemoryAdapter,
+  MyBadEngine: () => MyBadEngine,
   RULE_VALID_TRANSITIONS: () => RULE_VALID_TRANSITIONS,
   SQLiteAdapter: () => SQLiteAdapter,
+  StatsEngine: () => StatsEngine,
   VALID_TRANSITIONS: () => VALID_TRANSITIONS,
   isValidRuleTransition: () => isValidRuleTransition,
   isValidTransition: () => isValidTransition,
@@ -633,7 +639,15 @@ var SQLiteAdapter = class {
   async getConfig(key) {
     const row = this.db.prepare("SELECT value FROM config WHERE key = ?").get(key);
     if (!row) return null;
-    return safeParseJson(row.value, row.value);
+    try {
+      const parsed = JSON.parse(row.value);
+      if (typeof parsed !== "string" && typeof row.value === "string") {
+        return row.value;
+      }
+      return parsed;
+    } catch {
+      return row.value;
+    }
   }
   async setConfig(key, value) {
     const serialized = typeof value === "string" ? value : JSON.stringify(value);
@@ -860,11 +874,318 @@ var MemoryAdapter = class {
     this.config.set(key, value);
   }
 };
+
+// src/engine/crud.ts
+function generateId(prefix = "m") {
+  const ts = Date.now().toString(36);
+  const rand = Math.random().toString(36).slice(2, 8);
+  return `${prefix}_${ts}_${rand}`;
+}
+var CrudEngine = class {
+  constructor(storage) {
+    this.storage = storage;
+  }
+  storage;
+  /** 捕捉错题，自动处理 recurrence 计数和同 category 自动关联 */
+  async addMistake(input) {
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const recurrence = await this.storage.incrementRecurrence(input.category, input.agent_id);
+    const mistake = {
+      ...input,
+      id: generateId("m"),
+      recurrence_count: recurrence,
+      created_at: now,
+      updated_at: now
+    };
+    await this.storage.addMistake(mistake);
+    if (recurrence > 1) {
+      const existing = await this.storage.queryMistakes({
+        category: input.category,
+        limit: 1
+      });
+      if (existing.length > 0 && existing[0].id !== mistake.id) {
+        await this.storage.addLink(mistake.id, existing[0].id, "same_category");
+      }
+    }
+    return mistake;
+  }
+  /** 获取单个错题 */
+  async getMistake(id) {
+    return this.storage.getMistake(id);
+  }
+  /** 更新错题 */
+  async updateMistake(id, updates) {
+    await this.storage.updateMistake(id, { ...updates, updated_at: (/* @__PURE__ */ new Date()).toISOString() });
+  }
+  /** 查询错题 */
+  async queryMistakes(filter) {
+    return this.storage.queryMistakes(filter);
+  }
+  /** 创建规则 */
+  async addRule(input) {
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const rule = {
+      ...input,
+      id: generateId("r"),
+      source_count: input.source_ids?.length ?? 1,
+      verified_count: 0,
+      fail_count: 0,
+      created_at: now,
+      updated_at: now
+    };
+    await this.storage.addRule(rule);
+    return rule;
+  }
+  /** 查询规则 */
+  async getRules(filter) {
+    return this.storage.getRules(filter);
+  }
+  /** 更新规则 */
+  async updateRule(id, updates) {
+    await this.storage.updateRule(id, { ...updates, updated_at: (/* @__PURE__ */ new Date()).toISOString() });
+  }
+  /** 添加验证记录，同时更新规则的 verified_count/fail_count */
+  async addVerification(input) {
+    await this.storage.addVerification(input);
+    const counts = await this.storage.getVerificationCount(input.rule_id);
+    if (input.result === "pass") {
+      await this.storage.updateRule(input.rule_id, { verified_count: counts.pass });
+    } else {
+      await this.storage.updateRule(input.rule_id, { fail_count: counts.fail });
+    }
+  }
+  /** 全文搜索错题 */
+  async searchMistakes(query, limit) {
+    return this.storage.searchMistakes(query, limit);
+  }
+};
+
+// src/engine/linker.ts
+var LinkerEngine = class {
+  constructor(storage) {
+    this.storage = storage;
+  }
+  storage;
+  /** 建立关联，幂等（重复不报错） */
+  async addLink(fromId, toId, type, confidence = 1) {
+    await this.storage.addLink(fromId, toId, type, confidence);
+  }
+  /** 获取直接关联 */
+  async getLinks(id, direction = "outbound") {
+    return this.storage.getLinks(id, direction);
+  }
+  /** 获取多度关联（递归查询） */
+  async getRelated(id, depth = 2) {
+    return this.storage.getRelated(id, depth);
+  }
+};
+
+// src/engine/lifecycle.ts
+var InvalidTransitionError = class extends Error {
+  constructor(from, to) {
+    super(`Invalid transition: ${from} \u2192 ${to}`);
+    this.from = from;
+    this.to = to;
+    this.name = "InvalidTransitionError";
+  }
+  from;
+  to;
+};
+var LifecycleEngine = class {
+  constructor(storage) {
+    this.storage = storage;
+  }
+  storage;
+  /** 状态流转，校验合法性 */
+  async transition(mistakeId, toStatus) {
+    const mistake = await this.storage.getMistake(mistakeId);
+    if (!mistake) throw new Error(`Mistake not found: ${mistakeId}`);
+    if (!isValidTransition(mistake.status, toStatus)) {
+      throw new InvalidTransitionError(mistake.status, toStatus);
+    }
+    const updates = {
+      status: toStatus,
+      updated_at: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    if (toStatus === "graduated") {
+      const rules = await this.storage.getRules({ category: mistake.category, status: "active" });
+      if (rules.length > 0) {
+        updates.graduated_to_rule = rules[0].id;
+      }
+    }
+    if (toStatus === "abandoned") {
+      updates.archived_at = (/* @__PURE__ */ new Date()).toISOString();
+    }
+    await this.storage.updateMistake(mistakeId, updates);
+    const updated = await this.storage.getMistake(mistakeId);
+    return updated;
+  }
+  /** 规则状态流转 */
+  async transitionRule(ruleId, toStatus) {
+    const rule = await this.storage.getRules({ status: "active" });
+    const found = (await this.storage.getRules()).find((r) => r.id === ruleId);
+    if (!found) throw new Error(`Rule not found: ${ruleId}`);
+    if (!isValidRuleTransition(found.status, toStatus)) {
+      throw new InvalidTransitionError(found.status, toStatus);
+    }
+    await this.storage.updateRule(ruleId, {
+      status: toStatus,
+      updated_at: (/* @__PURE__ */ new Date()).toISOString()
+    });
+    const rules = await this.storage.getRules();
+    return rules.find((r) => r.id === ruleId);
+  }
+  /** 检查是否满足毕业条件: recurrence >= 2 且有同 category 的规则 */
+  async checkGraduation(mistakeId) {
+    const mistake = await this.storage.getMistake(mistakeId);
+    if (!mistake) return { eligible: false };
+    if (mistake.recurrence_count < 2) return { eligible: false };
+    const rules = await this.storage.getRules({ category: mistake.category });
+    const activeRule = rules.find((r) => r.status === "active" || r.status === "verified");
+    if (!activeRule) return { eligible: false };
+    return { eligible: true, rule: activeRule };
+  }
+  /** 压缩已毕业的错题 */
+  async compact(category) {
+    return this.storage.compactGraduated(category);
+  }
+};
+
+// src/engine/stats.ts
+var StatsEngine = class {
+  constructor(storage) {
+    this.storage = storage;
+  }
+  storage;
+  /** 获取分类统计 */
+  async getCategoryStats(agentId) {
+    return this.storage.getCategoryStats(agentId);
+  }
+  /** 获取全局统计 */
+  async getOverallStats(agentId, dateRange) {
+    return this.storage.getOverallStats(agentId, dateRange);
+  }
+  /** 获取结构化反思输入数据 */
+  async getReflectionData(options = {}) {
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const allMistakes = await this.storage.queryMistakes({
+      date_from: options.dateFrom,
+      date_to: options.dateTo
+    });
+    const pending = allMistakes.filter((m) => m.status === "pending");
+    const recurring = allMistakes.filter(
+      (m) => m.status === "recurring" || options.minRecurrence && m.recurrence_count >= options.minRecurrence
+    );
+    let hotCategories = await this.storage.getCategoryStats();
+    if (options.includeCategories) {
+      hotCategories = hotCategories.filter((c) => options.includeCategories.includes(c.category));
+    }
+    hotCategories.sort((a, b) => b.count - a.count);
+    const linkedGroups = [];
+    for (const m of allMistakes.slice(0, 20)) {
+      const related = await this.storage.getRelated(m.id, 1);
+      if (related.length > 0) {
+        linkedGroups.push({ id: m.id, related_count: related.length });
+      }
+    }
+    return {
+      pending_mistakes: pending.length,
+      recurring_mistakes: recurring.length,
+      hot_categories: hotCategories.slice(0, 10),
+      linked_groups: linkedGroups,
+      date_range: {
+        from: options.dateFrom ?? allMistakes[allMistakes.length - 1]?.created_at ?? now,
+        to: options.dateTo ?? now
+      }
+    };
+  }
+};
+
+// src/engine/index.ts
+var MyBadEngine = class {
+  crud;
+  linker;
+  lifecycle;
+  stats;
+  constructor(storage) {
+    this.crud = new CrudEngine(storage);
+    this.linker = new LinkerEngine(storage);
+    this.lifecycle = new LifecycleEngine(storage);
+    this.stats = new StatsEngine(storage);
+  }
+  // ── CRUD 代理方法 ─────────────────────────────────────
+  addMistake(input) {
+    return this.crud.addMistake(input);
+  }
+  getMistake(id) {
+    return this.crud.getMistake(id);
+  }
+  updateMistake(id, updates) {
+    return this.crud.updateMistake(id, updates);
+  }
+  queryMistakes(filter) {
+    return this.crud.queryMistakes(filter);
+  }
+  addRule(input) {
+    return this.crud.addRule(input);
+  }
+  getRules(filter) {
+    return this.crud.getRules(filter);
+  }
+  updateRule(id, updates) {
+    return this.crud.updateRule(id, updates);
+  }
+  addVerification(input) {
+    return this.crud.addVerification(input);
+  }
+  searchMistakes(query, limit) {
+    return this.crud.searchMistakes(query, limit);
+  }
+  // ── Linker 代理方法 ───────────────────────────────────
+  addLink(fromId, toId, type, confidence) {
+    return this.linker.addLink(fromId, toId, type, confidence);
+  }
+  getLinks(id, direction) {
+    return this.linker.getLinks(id, direction);
+  }
+  getRelated(id, depth) {
+    return this.linker.getRelated(id, depth);
+  }
+  // ── Lifecycle 代理方法 ────────────────────────────────
+  transition(mistakeId, toStatus) {
+    return this.lifecycle.transition(mistakeId, toStatus);
+  }
+  transitionRule(ruleId, toStatus) {
+    return this.lifecycle.transitionRule(ruleId, toStatus);
+  }
+  checkGraduation(mistakeId) {
+    return this.lifecycle.checkGraduation(mistakeId);
+  }
+  compact(category) {
+    return this.lifecycle.compact(category);
+  }
+  // ── Stats 代理方法 ────────────────────────────────────
+  getCategoryStats(agentId) {
+    return this.stats.getCategoryStats(agentId);
+  }
+  getOverallStats(agentId, dateRange) {
+    return this.stats.getOverallStats(agentId, dateRange);
+  }
+  getReflectionData(options) {
+    return this.stats.getReflectionData(options);
+  }
+};
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
+  CrudEngine,
+  InvalidTransitionError,
+  LifecycleEngine,
+  LinkerEngine,
   MemoryAdapter,
+  MyBadEngine,
   RULE_VALID_TRANSITIONS,
   SQLiteAdapter,
+  StatsEngine,
   VALID_TRANSITIONS,
   isValidRuleTransition,
   isValidTransition,

@@ -269,4 +269,125 @@ declare class MemoryAdapter implements StorageAdapter {
 /** 执行全部 pending migrations */
 declare function runMigrations(db: Database): void;
 
-export { type CategoryStats, type ContextMessage, type DateRange, type LinkDirection, type LinkType, MemoryAdapter, type Mistake, type MistakeFilter, type MistakeLink, type MistakeStatus, type OverallStats, RULE_VALID_TRANSITIONS, type Reflection, type ReflectionFilter, type Rule, type RuleFilter, type RulePriority, type RuleStatus, SQLiteAdapter, type StorageAdapter, type TriggerType, VALID_TRANSITIONS, type Verification, type VerificationCount, type VerificationResult, isValidRuleTransition, isValidTransition, runMigrations };
+/** CRUD 引擎 — 错题和规则的增删改查 + recurrence 原子计数 */
+declare class CrudEngine {
+    private storage;
+    constructor(storage: StorageAdapter);
+    /** 捕捉错题，自动处理 recurrence 计数和同 category 自动关联 */
+    addMistake(input: Omit<Mistake, 'id' | 'created_at' | 'updated_at' | 'recurrence_count'>): Promise<Mistake>;
+    /** 获取单个错题 */
+    getMistake(id: string): Promise<Mistake | null>;
+    /** 更新错题 */
+    updateMistake(id: string, updates: Partial<Mistake>): Promise<void>;
+    /** 查询错题 */
+    queryMistakes(filter: MistakeFilter): Promise<Mistake[]>;
+    /** 创建规则 */
+    addRule(input: Omit<Rule, 'id' | 'created_at' | 'updated_at' | 'verified_count' | 'fail_count' | 'source_count'>): Promise<Rule>;
+    /** 查询规则 */
+    getRules(filter?: RuleFilter): Promise<Rule[]>;
+    /** 更新规则 */
+    updateRule(id: string, updates: Partial<Rule>): Promise<void>;
+    /** 添加验证记录，同时更新规则的 verified_count/fail_count */
+    addVerification(input: Omit<Verification, 'id'>): Promise<void>;
+    /** 全文搜索错题 */
+    searchMistakes(query: string, limit?: number): Promise<Mistake[]>;
+}
+
+/** 关联引擎 — 错题之间的正向/反向/递归关联查询 */
+declare class LinkerEngine {
+    private storage;
+    constructor(storage: StorageAdapter);
+    /** 建立关联，幂等（重复不报错） */
+    addLink(fromId: string, toId: string, type: LinkType, confidence?: number): Promise<void>;
+    /** 获取直接关联 */
+    getLinks(id: string, direction?: LinkDirection): Promise<MistakeLink[]>;
+    /** 获取多度关联（递归查询） */
+    getRelated(id: string, depth?: number): Promise<MistakeLink[]>;
+}
+
+/** 非法状态流转错误 */
+declare class InvalidTransitionError extends Error {
+    readonly from: string;
+    readonly to: string;
+    constructor(from: string, to: string);
+}
+/** 生命周期引擎 — 状态流转 + 毕业检查 + 压缩归档 */
+declare class LifecycleEngine {
+    private storage;
+    constructor(storage: StorageAdapter);
+    /** 状态流转，校验合法性 */
+    transition(mistakeId: string, toStatus: MistakeStatus): Promise<Mistake>;
+    /** 规则状态流转 */
+    transitionRule(ruleId: string, toStatus: RuleStatus): Promise<Rule>;
+    /** 检查是否满足毕业条件: recurrence >= 2 且有同 category 的规则 */
+    checkGraduation(mistakeId: string): Promise<{
+        eligible: boolean;
+        rule?: Rule;
+    }>;
+    /** 压缩已毕业的错题 */
+    compact(category?: string): Promise<number>;
+}
+
+/** 反思输入数据 — 供 Agent LLM 分析用 */
+interface ReflectionInput {
+    pending_mistakes: number;
+    recurring_mistakes: number;
+    hot_categories: CategoryStats[];
+    linked_groups: {
+        id: string;
+        related_count: number;
+    }[];
+    date_range: {
+        from: string;
+        to: string;
+    };
+}
+/** 统计引擎 — 聚合统计 + 反思数据 */
+declare class StatsEngine {
+    private storage;
+    constructor(storage: StorageAdapter);
+    /** 获取分类统计 */
+    getCategoryStats(agentId?: string): Promise<CategoryStats[]>;
+    /** 获取全局统计 */
+    getOverallStats(agentId?: string, dateRange?: DateRange): Promise<OverallStats>;
+    /** 获取结构化反思输入数据 */
+    getReflectionData(options?: {
+        dateFrom?: string;
+        dateTo?: string;
+        includeCategories?: string[];
+        minRecurrence?: number;
+    }): Promise<ReflectionInput>;
+}
+
+/** MyBad 引擎 — 组合所有子引擎的 facade */
+declare class MyBadEngine {
+    readonly crud: CrudEngine;
+    readonly linker: LinkerEngine;
+    readonly lifecycle: LifecycleEngine;
+    readonly stats: StatsEngine;
+    constructor(storage: StorageAdapter);
+    addMistake(input: Parameters<CrudEngine['addMistake']>[0]): Promise<Mistake>;
+    getMistake(id: string): Promise<Mistake | null>;
+    updateMistake(id: string, updates: Partial<Mistake>): Promise<void>;
+    queryMistakes(filter: MistakeFilter): Promise<Mistake[]>;
+    addRule(input: Parameters<CrudEngine['addRule']>[0]): Promise<Rule>;
+    getRules(filter?: RuleFilter): Promise<Rule[]>;
+    updateRule(id: string, updates: Partial<Rule>): Promise<void>;
+    addVerification(input: Omit<Verification, 'id'>): Promise<void>;
+    searchMistakes(query: string, limit?: number): Promise<Mistake[]>;
+    addLink(fromId: string, toId: string, type: LinkType, confidence?: number): Promise<void>;
+    getLinks(id: string, direction?: LinkDirection): Promise<MistakeLink[]>;
+    getRelated(id: string, depth?: number): Promise<MistakeLink[]>;
+    transition(mistakeId: string, toStatus: Mistake['status']): Promise<Mistake>;
+    transitionRule(ruleId: string, toStatus: Rule['status']): Promise<Rule>;
+    checkGraduation(mistakeId: string): Promise<{
+        eligible: boolean;
+        rule?: Rule;
+    }>;
+    compact(category?: string): Promise<number>;
+    getCategoryStats(agentId?: string): Promise<CategoryStats[]>;
+    getOverallStats(agentId?: string, dateRange?: DateRange): Promise<OverallStats>;
+    getReflectionData(options?: Parameters<StatsEngine['getReflectionData']>[0]): Promise<ReflectionInput>;
+}
+
+export { type CategoryStats, type ContextMessage, CrudEngine, type DateRange, InvalidTransitionError, LifecycleEngine, type LinkDirection, type LinkType, LinkerEngine, MemoryAdapter, type Mistake, type MistakeFilter, type MistakeLink, type MistakeStatus, MyBadEngine, type OverallStats, RULE_VALID_TRANSITIONS, type Reflection, type ReflectionFilter, type ReflectionInput, type Rule, type RuleFilter, type RulePriority, type RuleStatus, SQLiteAdapter, StatsEngine, type StorageAdapter, type TriggerType, VALID_TRANSITIONS, type Verification, type VerificationCount, type VerificationResult, isValidRuleTransition, isValidTransition, runMigrations };
