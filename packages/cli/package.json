@@ -7,7 +7,7 @@
   },
   "files": ["dist"],
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && rm -rf dist/dashboard-assets && cp -r src/dashboard-assets dist/dashboard-assets",
     "start": "node dist/index.cjs"
   },
   "dependencies": {

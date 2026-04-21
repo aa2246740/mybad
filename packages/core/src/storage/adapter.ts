@@ -3,6 +3,7 @@ import type { Rule, RuleFilter } from '../models/rule'
 import type { MistakeLink, LinkDirection } from '../models/link'
 import type { Verification, VerificationCount } from '../models/verification'
 import type { Reflection, ReflectionFilter } from '../models/reflection'
+import type { CoachRecommendation, CoachRecommendationFilter } from '../models/coach'
 
 /** 日期范围 */
 export interface DateRange {
@@ -70,4 +71,9 @@ export interface StorageAdapter {
   // Config
   getConfig(key: string): Promise<unknown>
   setConfig(key: string, value: unknown): Promise<void>
+
+  // Coach Recommendations
+  addCoachRecommendation(rec: CoachRecommendation): Promise<string>
+  getCoachRecommendations(filter?: CoachRecommendationFilter): Promise<CoachRecommendation[]>
+  updateCoachRecommendation(id: string, updates: Partial<CoachRecommendation>): Promise<void>
 }

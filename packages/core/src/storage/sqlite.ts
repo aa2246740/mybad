@@ -7,6 +7,7 @@ import type { Rule, RuleFilter } from '../models/rule'
 import type { MistakeLink, LinkDirection } from '../models/link'
 import type { Verification, VerificationCount } from '../models/verification'
 import type { Reflection, ReflectionFilter } from '../models/reflection'
+import type { CoachRecommendation, CoachRecommendationFilter } from '../models/coach'
 import type {
   StorageAdapter,
   CategoryStats,
@@ -460,5 +461,65 @@ export class SQLiteAdapter implements StorageAdapter {
     this.db.prepare(
       'INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)'
     ).run(key, serialized)
+  }
+
+  // ── Coach Recommendations ─────────────────────────────
+
+  async addCoachRecommendation(rec: CoachRecommendation): Promise<string> {
+    this.db.prepare(`
+      INSERT INTO coach_recommendations (
+        id, category, pattern_summary, suggested_rule, target_file_type,
+        target_file_path, insertion_text, clarity, status,
+        source_mistake_ids, correction_count, applied_at, confirmed_by,
+        failure_reason, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      rec.id, rec.category, rec.pattern_summary, rec.suggested_rule,
+      rec.target_file_type, rec.target_file_path ?? null,
+      rec.insertion_text ?? null, rec.clarity, rec.status,
+      JSON.stringify(rec.source_mistake_ids), rec.correction_count,
+      rec.applied_at ?? null, rec.confirmed_by ?? null,
+      rec.failure_reason ?? null, rec.created_at, rec.updated_at
+    )
+    return rec.id
+  }
+
+  async getCoachRecommendations(filter?: CoachRecommendationFilter): Promise<CoachRecommendation[]> {
+    const conditions: string[] = []
+    const values: any[] = []
+    if (filter?.category) { conditions.push('category = ?'); values.push(filter.category) }
+    if (filter?.status) { conditions.push('status = ?'); values.push(filter.status) }
+    if (filter?.clarity) { conditions.push('clarity = ?'); values.push(filter.clarity) }
+
+    let sql = 'SELECT * FROM coach_recommendations'
+    if (conditions.length > 0) sql += ' WHERE ' + conditions.join(' AND ')
+    sql += ' ORDER BY created_at DESC'
+    if (filter?.limit) { sql += ' LIMIT ?'; values.push(filter.limit) }
+    if (filter?.offset) { sql += ' OFFSET ?'; values.push(filter.offset) }
+
+    const rows = this.db.prepare(sql).all(...values) as any[]
+    return rows.map((row: any) => ({
+      ...row,
+      source_mistake_ids: safeParseJson<string[]>(row.source_mistake_ids, []),
+    }))
+  }
+
+  async updateCoachRecommendation(id: string, updates: Partial<CoachRecommendation>): Promise<void> {
+    const fields: string[] = []
+    const values: any[] = []
+    for (const [key, value] of Object.entries(updates)) {
+      if (key === 'source_mistake_ids') {
+        fields.push(`${key} = ?`)
+        values.push(JSON.stringify(value))
+      } else {
+        fields.push(`${key} = ?`)
+        values.push(value)
+      }
+    }
+    if (fields.length === 0) return
+    values.push(id)
+    this.db.prepare(
+      `UPDATE coach_recommendations SET ${fields.join(', ')} WHERE id = ?`
+    ).run(...values)
   }
 }

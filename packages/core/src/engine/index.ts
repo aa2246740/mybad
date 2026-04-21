@@ -8,11 +8,15 @@ import { CrudEngine } from './crud'
 import { LinkerEngine } from './linker'
 import { LifecycleEngine, InvalidTransitionError } from './lifecycle'
 import { StatsEngine, ReflectionInput } from './stats'
+import { CoachEngine } from './coach'
+import type { CoachRecommendationFilter, CoachTarget } from '../models/coach'
+import type { AdapterRegistry } from '../adapter/registry'
 
 export { CrudEngine } from './crud'
 export { LinkerEngine } from './linker'
 export { LifecycleEngine, InvalidTransitionError } from './lifecycle'
 export { StatsEngine } from './stats'
+export { CoachEngine } from './coach'
 export type { ReflectionInput } from './stats'
 
 /** MyBad 引擎 — 组合所有子引擎的 facade */
@@ -21,12 +25,16 @@ export class MyBadEngine {
   readonly linker: LinkerEngine
   readonly lifecycle: LifecycleEngine
   readonly stats: StatsEngine
+  readonly coach: CoachEngine
+  readonly adapters?: AdapterRegistry
 
-  constructor(storage: StorageAdapter) {
+  constructor(storage: StorageAdapter, adapters?: AdapterRegistry) {
     this.crud = new CrudEngine(storage)
     this.linker = new LinkerEngine(storage)
     this.lifecycle = new LifecycleEngine(storage)
     this.stats = new StatsEngine(storage)
+    this.coach = new CoachEngine(storage)
+    this.adapters = adapters
   }
 
   // ── CRUD 代理方法 ─────────────────────────────────────
@@ -55,4 +63,27 @@ export class MyBadEngine {
   getCategoryStats(agentId?: string) { return this.stats.getCategoryStats(agentId) }
   getOverallStats(agentId?: string, dateRange?: DateRange) { return this.stats.getOverallStats(agentId, dateRange) }
   getReflectionData(options?: Parameters<StatsEngine['getReflectionData']>[0]) { return this.stats.getReflectionData(options) }
+
+  // ── Coach 代理方法 ────────────────────────────────────
+  coachAnalyze(options?: { minRecurrence?: number; targets?: CoachTarget[]; agentId?: string }) {
+    return this.coach.analyze(options)
+  }
+  coachGetRecommendations(filter?: CoachRecommendationFilter) {
+    return this.coach.getRecommendations(filter)
+  }
+  coachConfirm(id: string, confirmedBy: string) {
+    return this.coach.confirm(id, confirmedBy)
+  }
+  coachReject(id: string, reason?: string) {
+    return this.coach.reject(id, reason)
+  }
+  coachMarkApplied(id: string) {
+    return this.coach.markApplied(id)
+  }
+  coachGetPendingConfirmations() {
+    return this.coach.getPendingConfirmations()
+  }
+  coachGetAppliedRules() {
+    return this.coach.getAppliedRules()
+  }
 }

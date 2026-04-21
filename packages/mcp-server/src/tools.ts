@@ -358,4 +358,102 @@ export const tools: ToolDefinition[] = [
       return { success: true, key: args.key, value: args.value }
     },
   },
+
+  // MCP-12: correction_coach
+  {
+    name: 'correction_coach',
+    description: 'Coach 分析：从历史纠错记录中发现模式，生成改进建议。明确的纠正会自动标记为可应用，模糊的纠正会进入 pending 等待用户确认。',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        min_recurrence: { type: 'number', description: '最小复发次数阈值，默认 2' },
+        targets: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              type: { type: 'string', enum: ['CLAUDE.md', 'skill', 'workflow', 'SOP', 'memory'], description: '目标文件类型' },
+              path: { type: 'string', description: '文件路径（相对项目根目录）' },
+              description: { type: 'string', description: '文件描述' },
+            },
+            required: ['type', 'path', 'description'],
+          },
+          description: '当前环境中的目标文件列表，帮助 Coach 匹配建议到具体文件',
+        },
+        agent_id: { type: 'string', description: '限定特定 Agent 的记录' },
+      },
+    },
+    handler: async (engine, args) => {
+      const result = await engine.coachAnalyze({
+        minRecurrence: args.min_recurrence as number,
+        targets: args.targets as any[],
+        agentId: args.agent_id as string,
+      })
+      return result as unknown as Record<string, unknown>
+    },
+  },
+
+  // MCP-13: correction_coach_confirm
+  {
+    name: 'correction_coach_confirm',
+    description: '确认或拒绝一条 pending 的 Coach 推荐。',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        recommendation_id: { type: 'string', description: '推荐 ID' },
+        action: { type: 'string', enum: ['confirm', 'reject'], description: '确认或拒绝' },
+        reason: { type: 'string', description: '拒绝原因（可选）' },
+      },
+      required: ['recommendation_id', 'action'],
+    },
+    handler: async (engine, args) => {
+      const id = args.recommendation_id as string
+      if (args.action === 'confirm') {
+        const rec = await engine.coachConfirm(id, 'user')
+        return { success: true, recommendation: rec }
+      }
+      const rec = await engine.coachReject(id, args.reason as string)
+      return { success: true, rejected: true, recommendation: rec }
+    },
+  },
+
+  // MCP-14: correction_coach_pending
+  {
+    name: 'correction_coach_pending',
+    description: '获取所有等待用户确认的 Coach 推荐。主 Agent 在新 session 开始时可以调用此工具，将 pending 推荐呈现给用户。',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {},
+    },
+    handler: async (engine, _args) => {
+      const pending = await engine.coachGetPendingConfirmations()
+      return {
+        total: pending.length,
+        recommendations: pending.map(r => ({
+          id: r.id,
+          category: r.category,
+          pattern_summary: r.pattern_summary,
+          suggested_rule: r.suggested_rule,
+          target_file_type: r.target_file_type,
+          target_file_path: r.target_file_path,
+          correction_count: r.correction_count,
+          source_corrections: r.source_mistake_ids,
+        })),
+      }
+    },
+  },
+
+  // MCP-15: correction_coach_applied
+  {
+    name: 'correction_coach_applied',
+    description: '获取所有已应用的 Coach 规则。这些规则应该被注入到 Agent 的上下文中以防止再犯。',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {},
+    },
+    handler: async (engine, _args) => {
+      const rules = await engine.coachGetAppliedRules()
+      return { total: rules.length, rules }
+    },
+  },
 ]

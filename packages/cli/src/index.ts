@@ -7,6 +7,10 @@ import { makeReflectCommand } from './commands/reflect'
 import { makeStatsCommand } from './commands/stats'
 import { makeSearchCommand } from './commands/search'
 import { makeConfigCommand } from './commands/config'
+import { makeDashboardCommand } from './commands/dashboard'
+import { makeInitCommand } from './commands/init'
+import { makeRegisterCommand } from './commands/register'
+import { makeCoachCommand } from './commands/coach'
 
 const program = new Command()
 program
@@ -22,5 +26,9 @@ program.addCommand(makeReflectCommand())
 program.addCommand(makeStatsCommand())
 program.addCommand(makeSearchCommand())
 program.addCommand(makeConfigCommand())
+program.addCommand(makeDashboardCommand())
+program.addCommand(makeInitCommand())
+program.addCommand(makeRegisterCommand())
+program.addCommand(makeCoachCommand())
 
 program.parse()

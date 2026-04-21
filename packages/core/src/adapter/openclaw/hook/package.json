@@ -1,0 +1,12 @@
+{
+  "name": "@mybad/openclaw-hook",
+  "version": "1.0.0",
+  "description": "myBad OpenClaw hook — agent:bootstrap handler",
+  "main": "handler.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0"
+  }
+}

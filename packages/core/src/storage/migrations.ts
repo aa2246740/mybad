@@ -105,6 +105,100 @@ const migrations: Migration[] = [
       `)
     },
   },
+  {
+    id: 2,
+    name: '002_coach_recommendations',
+    up(db: Database) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS coach_recommendations (
+          id                TEXT PRIMARY KEY,
+          category          TEXT NOT NULL,
+          pattern_summary   TEXT NOT NULL,
+          suggested_rule    TEXT NOT NULL,
+          target_file_type  TEXT NOT NULL DEFAULT 'CLAUDE.md',
+          target_file_path  TEXT,
+          insertion_text    TEXT,
+          clarity           TEXT NOT NULL DEFAULT 'ambiguous',
+          status            TEXT NOT NULL DEFAULT 'pending',
+          source_mistake_ids TEXT NOT NULL DEFAULT '[]',
+          correction_count  INTEGER NOT NULL DEFAULT 1,
+          applied_at        TEXT,
+          confirmed_by      TEXT,
+          failure_reason    TEXT,
+          created_at        TEXT NOT NULL,
+          updated_at        TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_coach_category ON coach_recommendations(category);
+        CREATE INDEX IF NOT EXISTS idx_coach_status ON coach_recommendations(status);
+        CREATE INDEX IF NOT EXISTS idx_coach_clarity ON coach_recommendations(clarity);
+      `)
+    },
+  },
+  {
+    id: 3,
+    name: '003_adapter_extensions',
+    up(db: Database) {
+      db.exec(`
+        -- 规则追踪表：记录规则的触发/遵守/违反次数
+        CREATE TABLE IF NOT EXISTS rule_tracking (
+          id                TEXT PRIMARY KEY,
+          recommendation_id TEXT NOT NULL REFERENCES coach_recommendations(id) ON DELETE CASCADE,
+          category          TEXT NOT NULL,
+          scope             TEXT NOT NULL DEFAULT 'project',
+          triggered_count   INTEGER NOT NULL DEFAULT 0,
+          obeyed_count      INTEGER NOT NULL DEFAULT 0,
+          violated_count    INTEGER NOT NULL DEFAULT 0,
+          confidence        REAL NOT NULL DEFAULT 0.0,
+          lifecycle         TEXT NOT NULL DEFAULT 'active',
+          created_at        TEXT NOT NULL,
+          last_triggered_at TEXT,
+          last_violated_at  TEXT,
+          last_checked_at   TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_tracking_category ON rule_tracking(category);
+        CREATE INDEX IF NOT EXISTS idx_tracking_lifecycle ON rule_tracking(lifecycle);
+        CREATE INDEX IF NOT EXISTS idx_tracking_recommendation ON rule_tracking(recommendation_id);
+
+        -- 规则冲突记录表
+        CREATE TABLE IF NOT EXISTS rule_conflicts (
+          id                TEXT PRIMARY KEY,
+          category          TEXT NOT NULL,
+          winner_scope      TEXT NOT NULL,
+          winner_rule_id    TEXT NOT NULL,
+          winner_rule_text  TEXT NOT NULL,
+          loser_scope       TEXT NOT NULL,
+          loser_rule_id     TEXT NOT NULL,
+          loser_rule_text   TEXT NOT NULL,
+          resolved_at       TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_conflicts_category ON rule_conflicts(category);
+
+        -- 执行规则表：存储可执行的确定性规则模式
+        CREATE TABLE IF NOT EXISTS enforcement_rules (
+          id                  TEXT PRIMARY KEY,
+          category            TEXT NOT NULL,
+          recommendation_id   TEXT NOT NULL REFERENCES coach_recommendations(id) ON DELETE CASCADE,
+          trigger_tool        TEXT NOT NULL,
+          trigger_pattern     TEXT NOT NULL,
+          trigger_mcp_tool    TEXT,
+          action              TEXT NOT NULL DEFAULT 'warn',
+          message             TEXT NOT NULL,
+          confidence          REAL NOT NULL DEFAULT 0.0,
+          created_from        TEXT NOT NULL DEFAULT 'coach_auto',
+          created_at          TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_enforcement_category ON enforcement_rules(category);
+        CREATE INDEX IF NOT EXISTS idx_enforcement_action ON enforcement_rules(action);
+
+        -- Coach 推荐表扩展：新增 scope 字段
+        ALTER TABLE coach_recommendations ADD COLUMN scope TEXT NOT NULL DEFAULT 'project';
+      `)
+    },
+  },
 ]
 
 /** 执行全部 pending migrations */

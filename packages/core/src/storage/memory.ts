@@ -3,6 +3,7 @@ import type { Rule, RuleFilter } from '../models/rule'
 import type { MistakeLink, LinkDirection } from '../models/link'
 import type { Verification, VerificationCount } from '../models/verification'
 import type { Reflection, ReflectionFilter } from '../models/reflection'
+import type { CoachRecommendation, CoachRecommendationFilter } from '../models/coach'
 import type {
   StorageAdapter,
   CategoryStats,
@@ -256,5 +257,31 @@ export class MemoryAdapter implements StorageAdapter {
 
   async setConfig(key: string, value: unknown): Promise<void> {
     this.config.set(key, value)
+  }
+
+  // ── Coach Recommendations ─────────────────────────────
+
+  private coachRecommendations = new Map<string, CoachRecommendation>()
+
+  async addCoachRecommendation(rec: CoachRecommendation): Promise<string> {
+    this.coachRecommendations.set(rec.id, rec)
+    return rec.id
+  }
+
+  async getCoachRecommendations(filter?: CoachRecommendationFilter): Promise<CoachRecommendation[]> {
+    let results = Array.from(this.coachRecommendations.values())
+    if (filter?.category) results = results.filter(r => r.category === filter.category)
+    if (filter?.status) results = results.filter(r => r.status === filter.status)
+    if (filter?.clarity) results = results.filter(r => r.clarity === filter.clarity)
+    results.sort((a, b) => b.created_at.localeCompare(a.created_at))
+    if (filter?.offset) results = results.slice(filter.offset)
+    if (filter?.limit) results = results.slice(0, filter.limit)
+    return results
+  }
+
+  async updateCoachRecommendation(id: string, updates: Partial<CoachRecommendation>): Promise<void> {
+    const existing = this.coachRecommendations.get(id)
+    if (!existing) return
+    this.coachRecommendations.set(id, { ...existing, ...updates })
   }
 }
