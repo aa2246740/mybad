@@ -1,0 +1,15 @@
+{
+  "id": "mybad",
+  "name": "myBad — AI Agent 错题本",
+  "description": "让 Agent 记住你的纠正，不再犯同样的错。提供 correction_capture、correction_query、correction_coach 等工具。",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "dbPath": {
+        "type": "string",
+        "description": "SQLite 数据库路径（默认 .mybad/mybad.db）"
+      }
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "@mybad/openclaw-plugin",
+  "version": "0.1.0",
+  "description": "myBad OpenClaw 原生插件 — 让 Agent 拥有错题本",
+  "type": "module",
+  "main": "index.ts",
+  "files": ["index.ts", "src/*.ts", "openclaw.plugin.json"],
+  "keywords": ["openclaw", "plugin", "mybad", "correction", "memory"],
+  "license": "Apache-2.0",
+  "peerDependencies": {
+    "openclaw": ">=2026.2.13"
+  },
+  "dependencies": {
+    "@sinclair/typebox": "^0.34.0"
+  },
+  "openclaw": {
+    "extensions": ["./index.ts"]
+  }
+}
