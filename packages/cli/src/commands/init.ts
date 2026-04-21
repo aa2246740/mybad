@@ -86,7 +86,7 @@ async function initClaudeCode(projectRoot: string): Promise<void> {
       mybad: {
         command: 'npx',
         args: ['@mybad/mcp-server'],
-        env: { MYBAD_DB_PATH: path.join(projectRoot, '.mybad/mybad.db') },
+        env: { MYBAD_DB_PATH: path.join(projectRoot, '.mybad/mybad.db'), MYBAD_PLATFORM: 'claude-code' },
       },
     },
   }, null, 2))

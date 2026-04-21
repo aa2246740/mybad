@@ -43,6 +43,8 @@ export interface Mistake {
   agent_id?: string
   /** 哪个会话 */
   session_id?: string
+  /** 哪个平台捕捉的 (claude-code / openclaw / hermes) */
+  platform?: string
   /** 标签列表 */
   tags: string[]
   /** 置信度 0-1 */
@@ -62,6 +64,7 @@ export interface MistakeFilter {
   category?: string
   status?: MistakeStatus
   agent_id?: string
+  platform?: string
   date_from?: string
   date_to?: string
   recurrence_min?: number

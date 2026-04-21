@@ -22,6 +22,7 @@ const captureSchema = {
     user_correction: { type: 'string', description: '用户纠正原话' },
     agent_id: { type: 'string', description: '哪个 Agent' },
     session_id: { type: 'string', description: '哪个会话' },
+    platform: { type: 'string', enum: ['claude-code', 'openclaw', 'hermes', 'generic'], description: '捕捉平台（留空则从 MYBAD_PLATFORM 环境变量读取）' },
     tags: { type: 'array', items: { type: 'string' }, description: '标签' },
     confidence: { type: 'number', description: '置信度 0.0-1.0' },
   },
@@ -34,6 +35,7 @@ const querySchema = {
     category: { type: 'string' },
     status: { type: 'string', enum: ['pending', 'corrected', 'recurring', 'verified', 'graduated', 'abandoned', 'false_positive'] },
     agent_id: { type: 'string' },
+    platform: { type: 'string', description: '按平台过滤' },
     date_from: { type: 'string', description: 'ISO 8601 日期' },
     date_to: { type: 'string', description: 'ISO 8601 日期' },
     recurrence_min: { type: 'number' },
@@ -145,6 +147,8 @@ export const tools: ToolDefinition[] = [
     description: '捕捉一条错题记录。当检测到用户纠正信号时调用。',
     inputSchema: captureSchema,
     handler: async (engine, args) => {
+      // platform: 参数优先，否则从环境变量读取
+      const platform = (args.platform as string) || process.env.MYBAD_PLATFORM || undefined
       const m = await engine.addMistake({
         category: args.category as string,
         status: 'pending',
@@ -156,6 +160,7 @@ export const tools: ToolDefinition[] = [
         user_correction: args.user_correction as string,
         agent_id: args.agent_id as string,
         session_id: args.session_id as string,
+        platform,
         tags: (args.tags as string[]) ?? [],
         confidence: (args.confidence as number) ?? 1.0,
       })
@@ -180,6 +185,7 @@ export const tools: ToolDefinition[] = [
         category: args.category as string,
         status: args.status as any,
         agent_id: args.agent_id as string,
+        platform: args.platform as string,
         date_from: args.date_from as string,
         date_to: args.date_to as string,
         recurrence_min: args.recurrence_min as number,
@@ -198,6 +204,7 @@ export const tools: ToolDefinition[] = [
           user_intent: m.user_intent,
           user_correction: m.user_correction,
           agent_id: m.agent_id,
+          platform: m.platform,
           tags: m.tags,
           created_at: m.created_at,
         })),

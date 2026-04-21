@@ -84,9 +84,9 @@ export class SQLiteAdapter implements StorageAdapter {
     this.db.prepare(`
       INSERT INTO mistakes (id, category, status, trigger_type, recurrence_count,
         context_before, context_after, ai_misunderstanding, user_intent, user_correction,
-        agent_id, session_id, tags, confidence, graduated_to_rule,
+        agent_id, session_id, platform, tags, confidence, graduated_to_rule,
         created_at, updated_at, archived_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       mistake.id, mistake.category, mistake.status, mistake.trigger_type,
       mistake.recurrence_count,
@@ -94,6 +94,7 @@ export class SQLiteAdapter implements StorageAdapter {
       mistake.ai_misunderstanding ?? null, mistake.user_intent ?? null,
       mistake.user_correction ?? null,
       mistake.agent_id ?? null, mistake.session_id ?? null,
+      mistake.platform ?? null,
       JSON.stringify(mistake.tags), mistake.confidence,
       mistake.graduated_to_rule ?? null,
       mistake.created_at, mistake.updated_at, mistake.archived_at ?? null
@@ -155,6 +156,7 @@ export class SQLiteAdapter implements StorageAdapter {
     if (filter.category) { conditions.push('category = ?'); values.push(filter.category) }
     if (filter.status) { conditions.push('status = ?'); values.push(filter.status) }
     if (filter.agent_id) { conditions.push('agent_id = ?'); values.push(filter.agent_id) }
+    if (filter.platform) { conditions.push('platform = ?'); values.push(filter.platform) }
     if (filter.date_from) { conditions.push('created_at >= ?'); values.push(filter.date_from) }
     if (filter.date_to) { conditions.push('created_at <= ?'); values.push(filter.date_to) }
     if (filter.recurrence_min) { conditions.push('recurrence_count >= ?'); values.push(filter.recurrence_min) }

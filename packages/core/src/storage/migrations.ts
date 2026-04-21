@@ -199,6 +199,23 @@ const migrations: Migration[] = [
       `)
     },
   },
+  {
+    id: 4,
+    name: '004_platform_awareness',
+    up(db: Database) {
+      db.exec(`
+        -- mistakes 表：记录是被哪个 Agent 平台纠正的
+        ALTER TABLE mistakes ADD COLUMN platform TEXT;
+
+        -- rules 表：规则属于哪个平台（NULL = 所有平台通用）
+        ALTER TABLE rules ADD COLUMN platform TEXT;
+
+        -- 索引
+        CREATE INDEX IF NOT EXISTS idx_mistakes_platform ON mistakes(platform);
+        CREATE INDEX IF NOT EXISTS idx_rules_platform ON rules(platform);
+      `)
+    },
+  },
 ]
 
 /** 执行全部 pending migrations */
